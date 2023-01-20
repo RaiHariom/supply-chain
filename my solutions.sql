@@ -1,0 +1,370 @@
+use supply_chain;
+show tables;
+
+### PART A:::
+
+-- 1.	Read the data from all tables.
+select * from customer;
+select * from orderitem;
+select * from orders;
+select * from product;
+select * from supplier;
+
+
+-- 2.	Find the country wise count of customers.
+
+select country , count(id) as count from customer
+group by country
+order by count desc;
+
+-- 3.	Display the products which are not discontinued.
+select * from product
+where isdiscontinued = 0;
+
+
+-- 4.	Display the list of companies along with the product name that they are supplying.
+select s.companyname, p.productname from supplier s
+inner join product p
+on p.supplierid = s.id
+order by s.companyname;
+
+-- 5.	Display customer's information who stays in 'Mexico'
+select concat(firstname," ",lastname) as name, city  from customer
+where country = "mexico";
+
+-- 6.	Display the price of costliest item that is ordered by the customer along with the customer details.
+
+
+select * from (
+select *, rank()over(order by price desc) as Ran from (select c.*, max(ot.unitprice) as price from customer c
+join orders o
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+group by c.id) as p ) as t
+where t.Ran = 1;
+
+
+select c.*, o.customerid, ot.orderid, productname,p.id,ot.unitprice as price from customer c
+join orders o
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+join product p 
+on ot.productid = p.id
+group by ot.id
+having ot.unitprice = (select max(unitprice) from orderitem);
+
+
+-- 7.	Display supplier id who owns highest number of products.
+
+select s.*, sum(ot.quantity) as quantity  from supplier s
+join product p 
+on s.id = p.supplierid
+join orderitem ot
+on p.id = ot.productid
+group by s.companyname
+order by quantity desc;
+
+select s.id, productname,count(p.isdiscontinued) as quantity  from supplier s
+join product p 
+on s.id = p.supplierid
+group by s.id 
+order by quantity desc;
+
+select * 
+from
+(select *, rank() over(order by quantity desc) as ran 
+from 
+(
+select s.id, count(p.isdiscontinued) as quantity from supplier s
+join product p 
+on s.id = p.supplierid
+group by s.id 
+order by quantity desc
+) sq) sq2
+where ran = 1;
+
+-- 8.	Display month wise and year wise count of the orders placed.
+
+select year(orderdate) as year ,monthname(orderdate) as month, count(id) as counts from orders
+group by year, month;
+
+-- 9.	Which country has maximum suppliers.
+
+select country, count(country) from supplier
+group by country
+order by country desc
+limit 1;
+
+-- 10. Which customers did not place any order.
+select id from customer 
+except
+select customerid from orders;
+
+select * from customer
+where id in (select id from customer 
+except
+select customerid from orders);
+
+select * from customer
+where id not in (select customerid from orders);
+
+select c.* from customer c
+left join orders o 
+on c.id = o.customerid
+where o.id is null;
+
+### PART B:::
+
+-- 1.	Arrange the product id, product name based on high demand by the customer.
+
+select sq.id, sq.productname,sq.total_quantity from
+(
+select product.id,product.productname, count(quantity) as total_quantity from product
+inner join orderitem
+on product.id = orderitem.productid
+group by product.id
+order by total_quantity desc
+) sq;
+
+select product.id,product.productname, count(quantity) as total_quantity from product
+inner join orderitem
+on product.id = orderitem.productid
+group by product.id
+order by total_quantity desc;
+
+-- 2.	Display the number of orders delivered every year.
+select year(orderdate) as year, count(orderdate) total_orders from orders
+group by year ;
+
+-- 3.	Calculate year-wise total revenue.
+
+select year(orderdate) as year, sum(totalamount) from orders
+group by year;
+
+-- 4.	Display the customer details whose order amount is maximum including his past orders.
+
+select c.*, max(totalamount) as total_amount from customer c
+inner join orders o
+on c.id =  o.customerid
+group by c.id
+order by total_amount desc
+limit 1;
+
+-- 5.	Display total amount ordered by each customer from high to low. (donot use sum)
+
+select c.*, sum(totalamount) as total_amount from customer c
+inner join orders o
+on c.id =  o.customerid
+group by c.id  
+order by total_amount desc;
+
+/* A sales and marketing department of this company wants to find out how frequently 
+customer have business with them. This can be done in two ways. (Answer Q 6 and Q 7 for the same) */
+
+-- 6 Approach 1. List the current and previous order amount for each customers.
+
+select customerid, totalamount,
+lag(totalamount) over (partition by customerid) as next_order from orders;
+
+/* 7. Approach 2. Display the customerid, order ids and the 
+order dates along with the previous order date and the next order date for every customer in the table:: */
+
+select customerid, totalamount,
+lead(totalamount) over (partition by customerid) as previous_order from orders;
+
+-- 8.	Find out top 3 suppliers in terms of revenue generated by their products.
+
+/*
+select *, group_concat(companyname, city) from supplier
+group by country;
+
+select s.id, s.companyname,p.productname, sum(ot.unitprice*ot.quantity) as revenue from supplier s
+join product p
+on p.supplierid = s.id
+join orderitem ot
+on p.id = ot.productid
+group by s.id
+order by revenue desc
+limit 3;
+*/
+
+select s.id, p.productname, sum(o.totalamount) as revenue from supplier s
+join product p
+on p.supplierid = s.id
+join orderitem ot
+on p.id = ot.productid
+join orders o 
+on o.id = ot.orderid
+group by s.id
+order by revenue desc
+limit 3;
+
+select * from orders;
+#######################################################################################DAY2##################################################################################
+
+### PART C::: 
+
+
+-- 1.	Fetch the records to display the customer details who ordered more than 10 products in the single order
+select c.*, ot.quantity from customer c
+join orders o
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+where ot.quantity>10;
+
+
+-- 2.	Display all the product details with the ordered quantity size as 1.
+
+select p.*, ot.quantity from product p
+join orderitem ot
+on p.id = ot.productid
+where ot.quantity = 1;
+
+-- 3.	Display the compan(y)ies which supplies products whose cost is above 100.
+select s.companyname, s.city, s.country, p.unitprice from supplier s
+join product p 
+on s.id = p.supplierid
+where p.unitprice>100;
+
+-- 4.	Create a combined list to display customers and supplier list as per the below format.
+
+select c.*, s.companyname from customer c
+join orders o 
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+join product p 
+on ot.productid = p.id
+join supplier s
+on p.supplierid = s.id;
+
+select concat(firstname," ",lastname) as name, companyname from
+(select c.*, s.companyname from customer c
+join orders o 
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+join product p 
+on ot.productid = p.id
+join supplier s
+on p.supplierid = s.id
+) sq;
+
+
+-- 5.	Display the customer list who belongs to same city and country arrange in country wise.
+
+
+select * from customer;
+select concat(firstname, ' ',lastname) as name,country,city from customer
+order by country desc,city desc;
+
+select distinct(city) from customer
+where country="venezuela";
+
+
+### PART D:::
+
+-- 1.	Company sells the product at different discounted rates. Refer actual product price in product table and selling price in the order item table.
+--  Write a query to find out total amount saved in each order then display the orders from highest to lowest amount saved. 
+
+select ot.orderid, p.unitprice-ot.unitprice as amount_saved from product p
+join orderitem ot
+on p.id = ot.productid
+order by amount_saved desc;
+
+
+-- 2.	Mr. Kavin want to become a supplier. He got the database of "Richard's Supply" for reference. Help him to pick: 
+-- a. List few products that he should choose based on demand.
+-- b. Who will be the competitors for him for the products suggested in above questions.
+#####A######
+select product.id,product.productname, count(quantity) as total_quantity from product
+inner join orderitem
+on product.id = orderitem.productid
+group by product.id
+order by total_quantity desc
+limit 5;
+
+#####B#####
+select sq1.productname from (select product.id,product.productname, count(quantity) as total_quantity from product
+inner join orderitem
+on product.id = orderitem.productid
+group by product.id
+order by total_quantity desc
+limit 5) sq1;
+
+select s.companyname, p.productname from supplier s
+join product p
+on s.id = p.supplierid 
+where p.productname in (select sq1.productname from (select product.id,product.productname, count(quantity) as total_quantity from product
+inner join orderitem
+on product.id = orderitem.productid
+group by product.id
+order by total_quantity desc
+limit 5) sq1);
+
+
+-- 3.	Create a combined list to display customers and suppliers details considering the following criteria 
+-- •	Both customer and supplier belong to the same country
+
+select concat(c.firstname, ' ',c.lastname) as name,c.country,s.companyname from customer c
+join orders o 
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid
+join product p 
+on ot.productid = p.id
+join supplier s
+on p.supplierid = s.id
+where c.country = s.country;
+
+-- •	Customer who does not have supplier in their country
+
+select * from customer 
+where country in (select distinct country from customer
+except
+select distinct country from supplier);
+
+
+-- •	Supplier who does not have customer in their country
+
+select * from supplier
+where country in (select distinct country from supplier
+except
+select distinct country from customer);
+
+-- 4.	Every supplier supplies specific products to the customers. 
+-- Create a view of suppliers and total sales made by their products and write a query on this view to find out top 2 suppliers 
+
+select s.companyname, sum(ot.quantity*ot.unitprice) as total_sales from supplier s
+join product p 
+on s.id = p.supplierid
+join orderitem ot
+on p.id = ot.productid
+group by s.companyname
+order by total_sales desc
+limit 2;
+
+-- (using windows function RANK() in each country by total sales done by the products.
+
+select c.country, ot.unitprice * ot.quantity as total_sales from customer c
+join orders o 
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid;
+
+select country, sum(total_sales) as sales,rank() over(order by sum(total_sales) desc) ts
+from (select c.country, ot.unitprice * ot.quantity as total_sales from customer c
+join orders o 
+on c.id = o.customerid
+join orderitem ot
+on o.id = ot.orderid) sq
+group by country;
+
+
+
+
+
+
